@@ -5,7 +5,7 @@ export function Header() {
     <header className="mx-auto flex max-w-3xl flex-col gap-4 px-6 pt-10 pb-6 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <p className="font-display text-sm tracking-wide text-[#6b8f71] uppercase">
-          Lofi the Yeti · CLAY Hackathon
+          Lofi the Yeti
         </p>
         <h1 className="font-display mt-1 text-5xl leading-none text-[#3d2b1f]">Yeti&apos;s Diary</h1>
         <p className="mt-3 max-w-md text-base italic text-[#5c4638]">
