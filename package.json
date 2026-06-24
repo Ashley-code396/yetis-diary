@@ -1,0 +1,18 @@
+{
+  "name": "yetis-diary",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:move": "cd move/yetis_diary && sui move test",
+    "deploy": "tsx scripts/publish-and-init.ts",
+    "dev": "cd ui && npm run dev",
+    "build": "cd ui && npm run build"
+  },
+  "devDependencies": {
+    "@mysten/sui": "^2.20.0",
+    "@mysten/walrus": "^1.2.2",
+    "@noble/hashes": "^1.8.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}

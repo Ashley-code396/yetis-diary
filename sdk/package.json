@@ -1,0 +1,20 @@
+{
+  "name": "@yetis-diary/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mysten/sui": "^2.20.0",
+    "@mysten/walrus": "^1.2.2",
+    "@noble/hashes": "^1.8.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+:root {
+  --parchment: #f5edd6;
+  --ink: #3d2b1f;
+  --snow: #e8f4f8;
+  --accent: #6b8f71;
+  --warm-shadow: rgba(61, 43, 31, 0.12);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Lora', Georgia, serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 20% 10%, rgba(232, 244, 248, 0.8), transparent 40%),
+    radial-gradient(circle at 80% 0%, rgba(107, 143, 113, 0.15), transparent 35%),
+    linear-gradient(180deg, #faf6eb 0%, var(--parchment) 45%, #efe4cc 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: 'Caveat', cursive;
+}
+
+.dapp-kit-connect-button {
+  font-family: 'Lora', Georgia, serif !important;
+}

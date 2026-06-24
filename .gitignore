@@ -1,0 +1,10 @@
+# Ignore environment files
+.env
+ui/.env
+
+# Node modules and build artifacts
+node_modules/
+dist/
+/.parcel-cache
+/.next
+/.vite
