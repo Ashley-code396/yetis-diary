@@ -2,11 +2,15 @@
   "name": "yetis-diary",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "sdk",
+    "ui"
+  ],
   "scripts": {
     "test:move": "cd move/yetis_diary && sui move test",
     "deploy": "tsx scripts/publish-and-init.ts",
-    "dev": "cd ui && npm run dev",
-    "build": "cd ui && npm run build"
+    "dev": "npm run dev -w ui",
+    "build": "npm run build -w ui"
   },
   "devDependencies": {
     "@mysten/sui": "^2.20.0",
