@@ -27,6 +27,7 @@ body {
   font-family: 'Caveat', cursive;
 }
 
-.dapp-kit-connect-button {
-  font-family: 'Lora', Georgia, serif !important;
+mysten-dapp-kit-connect-button {
+  position: relative;
+  z-index: 9999;
 }
