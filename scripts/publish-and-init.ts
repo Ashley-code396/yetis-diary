@@ -15,7 +15,7 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Transaction } from '@mysten/sui/transactions';
 import { walrus } from '@mysten/walrus';
-import { encodeEmptyDiary, EMPTY_DIARY_PAYLOAD } from '../sdk/src/yetisDiary.js';
+import { encodeEmptyDiary, EMPTY_DIARY_PAYLOAD, hashDiaryContent, vectorsEqual } from '../sdk/src/yetisDiary.js';
 
 // Determine the repository root relative to this script file
 const __filename = fileURLToPath(import.meta.url);
@@ -153,6 +153,33 @@ async function main() {
     }
   }
   console.log('Genesis blob ID:', blobId);
+
+  // Verify the uploaded blob: re-fetch and hash-check it immediately.
+  // Some Walrus upload paths (e.g. the CLI) can silently append a trailing
+  // 0x0a byte, which would cause a permanent hash mismatch on read.
+  const verifyUrl = `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${encodeURIComponent(blobId)}`;
+  const verifyRes = await fetch(verifyUrl);
+  if (!verifyRes.ok) {
+    console.warn('Could not verify genesis blob (aggregator returned', verifyRes.status, ')');
+  } else {
+    const returnedBytes = new Uint8Array(await verifyRes.arrayBuffer());
+    if (returnedBytes.length !== bytes.length || !returnedBytes.every((b, i) => b === bytes[i])) {
+      throw new Error(
+        `Genesis blob content mismatch: uploaded ${bytes.length} bytes but ` +
+        `aggregator returns ${returnedBytes.length} bytes. The hash submitted to ` +
+        `the chain would be wrong. Aborting — fix the upload path first.\n` +
+        `Returned hex: ${Buffer.from(returnedBytes).toString('hex')}`
+      );
+    }
+    const verifyHash = hashDiaryContent(returnedBytes);
+    if (!vectorsEqual(verifyHash, contentHash)) {
+      throw new Error(
+        `Genesis blob hash mismatch: computed hash does not match uploaded content. ` +
+        `This indicates the upload path modified the bytes.`
+      );
+    }
+    console.log('Genesis blob integrity verified ✓');
+  }
 
   const tx = new Transaction();
   tx.moveCall({

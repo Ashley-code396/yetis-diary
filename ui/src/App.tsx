@@ -36,7 +36,7 @@ export function App() {
             <p className="font-semibold">Content verification failed</p>
             <p className="mt-1">
               Walrus content does not match the on-chain hash. The diary text is hidden until integrity
-              is restored.
+              is restored. Writing a new entry will re-upload the diary with the correct hash.
             </p>
           </div>
         </div>
@@ -52,6 +52,7 @@ export function App() {
       <TurnStatus
         eligibility={eligibilityQuery.data}
         isLoading={eligibilityQuery.isLoading}
+        error={eligibilityQuery.error instanceof Error ? eligibilityQuery.error : null}
       />
 
       <WriteBox eligibility={eligibilityQuery.data} />

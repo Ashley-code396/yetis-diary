@@ -16,9 +16,10 @@ function formatDuration(ms: number): string {
 interface TurnStatusProps {
   eligibility: EligibilityStatus | undefined;
   isLoading: boolean;
+  error: Error | null;
 }
 
-export function TurnStatus({ eligibility, isLoading }: TurnStatusProps) {
+export function TurnStatus({ eligibility, isLoading, error }: TurnStatusProps) {
   const account = useCurrentAccount();
 
   let content: React.ReactNode;
@@ -26,6 +27,12 @@ export function TurnStatus({ eligibility, isLoading }: TurnStatusProps) {
   if (!account) {
     content = (
       <p className="text-sm text-[#5c4638]">Connect a wallet to see whether it&apos;s your turn to write.</p>
+    );
+  } else if (error) {
+    content = (
+      <p className="text-sm text-red-800">
+        Could not check eligibility: {error.message}
+      </p>
     );
   } else if (isLoading || !eligibility) {
     content = <p className="text-sm italic text-[#7a6558]">Consulting the queue…</p>;

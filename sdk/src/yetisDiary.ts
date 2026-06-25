@@ -36,6 +36,7 @@ export function createYetisDiaryClient(options?: {
     walrus({
       uploadRelay: {
         host: WALRUS_UPLOAD_RELAY,
+        sendTip: true,
       },
     }),
   );
@@ -45,18 +46,35 @@ function moduleTarget(packageId: string, fn: string) {
   return `${packageId}::yetis_diary::${fn}`;
 }
 
-function parseVectorAddress(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((v) => String(v));
-}
 
-function parseContentHash(raw: unknown): Uint8Array {
-  if (Array.isArray(raw)) {
-    return new Uint8Array(raw.map((n) => Number(n)));
-  }
-  if (typeof raw === 'string') {
-    const hex = raw.startsWith('0x') ? raw.slice(2) : raw;
-    return new Uint8Array(hex.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) ?? []);
+const TableBcs = bcs.struct('Table', {
+  id: bcs.Address,
+  size: bcs.u64(),
+});
+
+const DiaryBcs = bcs.struct('Diary', {
+  id: bcs.Address,
+  entry_count: bcs.u64(),
+  last_writer: bcs.Address,
+  last_written_at: bcs.u64(),
+  current_blob_id: bcs.string(),
+  content_hash: bcs.vector(bcs.u8()),
+  queue: bcs.vector(bcs.Address),
+  turn_index: bcs.u64(),
+  registered: TableBcs,
+  last_written_at_by_wallet: TableBcs,
+});
+
+function toUint8Array(raw: unknown): Uint8Array {
+  if (raw instanceof Uint8Array) return raw;
+  if (Array.isArray(raw)) return new Uint8Array(raw);
+  if (raw && typeof raw === 'object') {
+    const keys = Object.keys(raw).map(Number).filter((k) => !isNaN(k)).sort((a, b) => a - b);
+    const bytes = new Uint8Array(keys.length);
+    for (let i = 0; i < keys.length; i++) {
+      bytes[i] = (raw as any)[keys[i]];
+    }
+    return bytes;
   }
   return new Uint8Array();
 }
@@ -70,22 +88,23 @@ export async function getDiaryOnChainState(
     include: { content: true },
   });
 
-  const obj: any = response.object;
-  if (obj?.data?.content?.dataType !== 'moveObject') {
+  const obj = response.object;
+  if (!obj || !obj.content || !obj.type?.includes('::Diary')) {
     throw new Error(`Diary object ${diaryId} not found or not a Move object`);
   }
 
-  const fields = obj.data.content.fields as Record<string, unknown>;
+  const bytes = toUint8Array(obj.content);
+  const parsed = DiaryBcs.parse(bytes);
 
   return {
     objectId: diaryId,
-    entryCount: Number(fields.entry_count ?? 0),
-    lastWriter: String(fields.last_writer ?? ''),
-    lastWrittenAt: Number(fields.last_written_at ?? 0),
-    currentBlobId: String(fields.current_blob_id ?? ''),
-    contentHash: parseContentHash(fields.content_hash),
-    turnIndex: Number(fields.turn_index ?? 0),
-    queue: parseVectorAddress(fields.queue),
+    entryCount: Number(parsed.entry_count),
+    lastWriter: parsed.last_writer,
+    lastWrittenAt: Number(parsed.last_written_at),
+    currentBlobId: parsed.current_blob_id,
+    contentHash: new Uint8Array(parsed.content_hash),
+    turnIndex: Number(parsed.turn_index),
+    queue: parsed.queue,
   };
 }
 
@@ -94,28 +113,24 @@ async function devInspectU64(
   _packageId: string,
   _target: string,
   args: (tx: Transaction) => void,
-  sender: string,
+  _sender: string,
 ): Promise<bigint> {
   const tx = new Transaction();
   args(tx);
-  const result = await (client as any).core.devInspectTransactionBlock({
-    transactionBlock: tx,
-    sender,
+  const result = await (client as any).core.simulateTransaction({
+    transaction: tx,
+    checksEnabled: false,
+    include: { commandResults: true },
   });
 
-  if (result.error) {
-    throw new Error(result.error.message ?? 'devInspect failed');
+  if (result.$kind === 'FailedTransaction') {
+    throw new Error(result.FailedTransaction.status.error?.message ?? 'simulateTransaction failed');
   }
 
-  const returnValue = result.results?.[0]?.returnValues?.[0];
+  const returnValue = result.commandResults?.[0]?.returnValues?.[0]?.bcs;
   if (!returnValue) return 0n;
 
-  const [bytes, type] = returnValue;
-  if (type !== 'u64') {
-    throw new Error(`Expected u64 return, got ${type}`);
-  }
-  // bcs.u64().parse returns bigint; assert via unknown cast for TS
-  return bcs.u64().parse(new Uint8Array(bytes)) as unknown as bigint;
+  return bcs.u64().parse(new Uint8Array(returnValue)) as unknown as bigint;
 }
 
 async function devInspectBool(
@@ -123,27 +138,24 @@ async function devInspectBool(
   _packageId: string,
   _target: string,
   args: (tx: Transaction) => void,
-  sender: string,
+  _sender: string,
 ): Promise<boolean> {
   const tx = new Transaction();
   args(tx);
-  const result = await (client as any).core.devInspectTransactionBlock({
-    transactionBlock: tx,
-    sender,
+  const result = await (client as any).core.simulateTransaction({
+    transaction: tx,
+    checksEnabled: false,
+    include: { commandResults: true },
   });
 
-  if (result.error) {
-    throw new Error(result.error.message ?? 'devInspect failed');
+  if (result.$kind === 'FailedTransaction') {
+    throw new Error(result.FailedTransaction.status.error?.message ?? 'simulateTransaction failed');
   }
 
-  const returnValue = result.results?.[0]?.returnValues?.[0];
+  const returnValue = result.commandResults?.[0]?.returnValues?.[0]?.bcs;
   if (!returnValue) return false;
 
-  const [bytes, type] = returnValue;
-  if (type !== 'bool') {
-    throw new Error(`Expected bool return, got ${type}`);
-  }
-  return bcs.bool().parse(new Uint8Array(bytes)) as unknown as boolean;
+  return bcs.bool().parse(new Uint8Array(returnValue)) as unknown as boolean;
 }
 
 async function devInspectAddress(
@@ -151,27 +163,24 @@ async function devInspectAddress(
   _packageId: string,
   _target: string,
   args: (tx: Transaction) => void,
-  sender: string,
+  _sender: string,
 ): Promise<string> {
   const tx = new Transaction();
   args(tx);
-  const result = await (client as any).core.devInspectTransactionBlock({
-    transactionBlock: tx,
-    sender,
+  const result = await (client as any).core.simulateTransaction({
+    transaction: tx,
+    checksEnabled: false,
+    include: { commandResults: true },
   });
 
-  if (result.error) {
-    throw new Error(result.error.message ?? 'devInspect failed');
+  if (result.$kind === 'FailedTransaction') {
+    throw new Error(result.FailedTransaction.status.error?.message ?? 'simulateTransaction failed');
   }
 
-  const returnValue = result.results?.[0]?.returnValues?.[0];
+  const returnValue = result.commandResults?.[0]?.returnValues?.[0]?.bcs;
   if (!returnValue) return '0x0';
 
-  const [bytes, type] = returnValue;
-  if (type !== 'address') {
-    throw new Error(`Expected address return, got ${type}`);
-  }
-  return bcs.Address.parse(new Uint8Array(bytes)) as unknown as string;
+  return bcs.Address.parse(new Uint8Array(returnValue)) as unknown as string;
 }
 
 async function devInspectOptionU64(
@@ -179,24 +188,24 @@ async function devInspectOptionU64(
   _packageId: string,
   _target: string,
   args: (tx: Transaction) => void,
-  sender: string,
+  _sender: string,
 ): Promise<number | null> {
   const tx = new Transaction();
   args(tx);
-  const result = await (client as any).core.devInspectTransactionBlock({
-    transactionBlock: tx,
-    sender,
+  const result = await (client as any).core.simulateTransaction({
+    transaction: tx,
+    checksEnabled: false,
+    include: { commandResults: true },
   });
 
-  if (result.error) {
-    throw new Error(result.error.message ?? 'devInspect failed');
+  if (result.$kind === 'FailedTransaction') {
+    throw new Error(result.FailedTransaction.status.error?.message ?? 'simulateTransaction failed');
   }
 
-  const returnValue = result.results?.[0]?.returnValues?.[0];
+  const returnValue = result.commandResults?.[0]?.returnValues?.[0]?.bcs;
   if (!returnValue) return null;
 
-  const [bytes] = returnValue;
-  const parsed = bcs.option(bcs.u64()).parse(new Uint8Array(bytes)) as unknown as bigint | null;
+  const parsed = bcs.option(bcs.u64()).parse(new Uint8Array(returnValue)) as unknown as bigint | null;
   return parsed === null ? null : Number(parsed);
 }
 
@@ -455,7 +464,23 @@ export async function buildWriteEntryFlow(
   payload: DiaryPayload;
 }> {
   const trimmed = params.text.trim();
-  const { payload: currentPayload } = await getFullDiary(client, params.diaryId);
+
+  // Try to get the current diary with hash verification. If hash verification
+  // fails (e.g. due to a stale Walrus blob or old on-chain hash), fall
+  // through to a direct fetch without verification so the user can still
+  // append their entry, re-upload with the correct hash, and restore integrity.
+  let currentPayload: DiaryPayload;
+  try {
+    ({ payload: currentPayload } = await getFullDiary(client, params.diaryId));
+  } catch (error) {
+    if (error instanceof DiaryContentVerificationError) {
+      const onChain = await getDiaryOnChainState(client, params.diaryId);
+      const bytes = await fetchWalrusBlob(onChain.currentBlobId);
+      currentPayload = parseDiaryPayload(bytes);
+    } else {
+      throw error;
+    }
+  }
 
   const newPayload = appendEntry(currentPayload, {
     author: params.author,

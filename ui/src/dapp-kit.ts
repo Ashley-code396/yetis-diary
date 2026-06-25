@@ -16,6 +16,7 @@ export const dAppKit = createDAppKit({
       walrus({
         uploadRelay: {
           host: 'https://upload-relay.testnet.walrus.space',
+          sendTip: true,
         },
       }),
     ),
